@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { intents, products, supabase, surveyStatus } from './survey'
+import { createClient } from '@supabase/supabase-js'
+import { intents, products, supabaseKey, supabaseUrl, surveyStatus } from './survey'
 import type { ResponseRow, Summary } from './survey'
 
 const PAGE_SIZE = 25
-const db = supabase!
+const db = createClient(supabaseUrl, supabaseKey)
 const dateFormat = new Intl.DateTimeFormat('en-PH', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila',
 })

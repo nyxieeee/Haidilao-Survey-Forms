@@ -1,9 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
-
-const url = import.meta.env.VITE_SUPABASE_URL
-const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-
-export const supabase = url && key ? createClient(url, key) : null
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+export const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+export const configured = Boolean(supabaseUrl && supabaseKey)
 
 export const products = [
   ['Sesame & Spicy Vermicelli', 'Sesame & Spicy'],
@@ -15,10 +12,35 @@ export const products = [
 
 export const intents = ['Yes', 'Maybe', 'No'] as const
 
-export async function surveyStatus() {
-  const result = await supabase!.from('tasting_settings').select('accepting').eq('id', 1).single()
-  if (result.error) throw result.error
-  return result.data.accepting as boolean
+async function publicRequest(path: string, options?: { body?: object; signal?: AbortSignal }) {
+  const response = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/rest/v1/${path}`, {
+    method: options?.body ? 'POST' : 'GET',
+    headers: {
+      apikey: supabaseKey,
+      ...(supabaseKey.startsWith('eyJ') && { Authorization: `Bearer ${supabaseKey}` }),
+      ...(options?.body && { 'Content-Type': 'application/json' }),
+    },
+    body: options?.body && JSON.stringify(options.body),
+    signal: options?.signal,
+  })
+  if (!response.ok) throw new Error(`Survey request failed (${response.status})`)
+  return response.json()
+}
+
+export async function surveyStatus(signal?: AbortSignal) {
+  const rows = await publicRequest('tasting_settings?select=accepting&id=eq.1', { signal })
+  if (typeof rows?.[0]?.accepting !== 'boolean') throw new Error('Missing survey status')
+  return rows[0].accepting as boolean
+}
+
+export function submitSurvey(body: {
+  p_submission_id: string
+  p_ratings: number[]
+  p_favorite: number
+  p_intent: FormDataEntryValue | null
+  p_comment: FormDataEntryValue | null
+}) {
+  return publicRequest('rpc/submit_tasting', { body })
 }
 
 export type ResponseRow = {

@@ -1,11 +1,11 @@
-import { StrictMode } from 'react'
+import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Admin } from './Admin'
 import { Guest } from './Guest'
-import { supabase } from './survey'
+import { configured } from './survey'
 import './style.css'
 
 const admin = location.pathname.replace(/\/+$/, '') === '/admin'
+const Admin = lazy(() => import('./Admin').then(module => ({ default: module.Admin })))
 if (admin) document.title = 'Staff Access · Haidilao Tasting Survey'
 
 function App() {
@@ -18,7 +18,7 @@ function App() {
         {admin && <nav><a href="/">Guest survey</a></nav>}
       </div>
     </header>
-    {!admin ? <Guest /> : supabase ? <Admin /> : <main className="page-width">
+    {!admin ? <Guest /> : configured ? <Suspense fallback={<main className="page-width"><p role="status">Loading staff access…</p></main>}><Admin /></Suspense> : <main className="page-width">
       <section className="card notice login"><p className="eyebrow">STAFF ACCESS</p>
         <h1>Staff sign-in</h1><p>Connect Supabase to enable staff access.</p>
       </section>

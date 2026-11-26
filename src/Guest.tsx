@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { intents, products, supabase, surveyStatus } from './survey'
+import { configured, intents, products, submitSurvey, surveyStatus } from './survey'
 import hotPotPhoto from './haidilao-hotpot.webp'
 
 const scores = [1, 2, 3, 4, 5]
@@ -16,12 +16,12 @@ export function Guest() {
   const confirmation = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
-    if (!supabase) return
-    let current = true
-    surveyStatus().then(value => {
-      if (current) { setAccepting(value); setStatusError(false) }
-    }).catch(() => { if (current) setStatusError(true) })
-    return () => { current = false }
+    if (!configured) return
+    const request = new AbortController()
+    surveyStatus(request.signal).then(value => {
+      if (!request.signal.aborted) { setAccepting(value); setStatusError(false) }
+    }).catch(() => { if (!request.signal.aborted) setStatusError(true) })
+    return () => request.abort()
   }, [statusAttempt])
 
   useEffect(() => {
@@ -30,20 +30,19 @@ export function Guest() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (sending || !supabase) return
+    if (sending || !configured || accepting !== true) return
     const fields = new FormData(event.currentTarget)
     setSending(true)
     setError('')
     try {
       submissionId.current ||= crypto.randomUUID()
-      const { data, error } = await supabase.rpc('submit_tasting', {
+      const data = await submitSurvey({
         p_submission_id: submissionId.current,
         p_ratings: products.map((_, index) => Number(fields.get(`rating-${index}`))),
         p_favorite: Number(fields.get('favorite')),
         p_intent: fields.get('intent'),
         p_comment: fields.get('comment'),
       })
-      if (error) throw error
       if (data === 'paused') {
         setError('The survey was paused before your response could be saved. Try again when it reopens.')
       } else if (data === 'accepted') {
@@ -78,12 +77,11 @@ export function Guest() {
       </section> : statusError ? <section className="card notice">
         <h2>Survey temporarily unavailable</h2><p>We couldn’t load the survey status.</p>
         <button onClick={() => setStatusAttempt(statusAttempt + 1)}>Try again</button>
-      </section> : supabase && accepting === null ? <section className="card" role="status">Loading survey…</section>
-        : accepting === false ? <section className="card notice">
+      </section> : accepting === false ? <section className="card notice">
           <h2>Survey paused</h2><p>We’re taking a break from collecting tasting feedback.</p>
           <button onClick={() => setStatusAttempt(statusAttempt + 1)}>Check again</button>
         </section> : <form onSubmit={submit}>
-          {!supabase && <p className="alert">Preview mode. Connect Supabase to accept responses.</p>}
+          {!configured && <p className="alert">Preview mode. Connect Supabase to accept responses.</p>}
           <section className="card">
             <h2>Rate the samples</h2>
             <p className="muted">Choose a rating for each product.</p>
@@ -115,7 +113,8 @@ export function Guest() {
             <textarea id="comment" name="comment" maxLength={1500} rows={4} aria-describedby="comment-help" placeholder="Share your thoughts…" />
           </section>
           {error && <p role="alert" className="alert">{error}</p>}
-          <button type="submit" className="primary submit" disabled={sending || !supabase}>{sending ? 'Saving…' : 'Submit feedback'}</button>
+          {configured && accepting === null && <p role="status" className="muted">Checking whether the survey is open…</p>}
+          <button type="submit" className="primary submit" disabled={sending || !configured || accepting !== true}>{sending ? 'Saving…' : 'Submit feedback'}</button>
         </form>}
     </div>
   </main>
