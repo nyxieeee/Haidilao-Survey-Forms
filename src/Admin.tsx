@@ -4,6 +4,8 @@ import type { Session } from '@supabase/supabase-js'
 import { createClient } from '@supabase/supabase-js'
 import { intents, products, supabaseKey, supabaseUrl, surveyStatus } from './survey'
 import type { ResponseRow, Summary } from './survey'
+import { countDay, DailyResults, dayBounds, dayLabel, Metrics, Ratings } from './results'
+import type { DailySummary, ResultRow } from './results'
 
 const PAGE_SIZE = 25
 const db = createClient(supabaseUrl, supabaseKey)
@@ -11,12 +13,16 @@ const dateFormat = new Intl.DateTimeFormat('en-PH', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila',
 })
 
-function getResponses(intent: string, status: string) {
+function getResponses(intent: string, status: string, day: string) {
   let query = db.from('tasting_responses').select(
     'id, created_at, ratings, favorite, intent, comment, reviewed', { count: 'exact' },
   )
   if (intent) query = query.eq('intent', intent)
   if (status) query = query.eq('reviewed', status === 'reviewed')
+  if (day) {
+    const [start, end] = dayBounds(day)
+    query = query.gte('created_at', start).lt('created_at', end)
+  }
   return query.order('id', { ascending: false })
 }
 
@@ -100,6 +106,9 @@ export function Admin() {
 
 function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authError: string }) {
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [days, setDays] = useState<DailySummary[] | null>(null)
+  const [dailyError, setDailyError] = useState(false)
+  const [day, setDay] = useState('')
   const [rows, setRows] = useState<ResponseRow[]>([])
   const [accepting, setAccepting] = useState<boolean | null>(null)
   const [intent, setIntent] = useState('')
@@ -114,6 +123,35 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
   const refresh = () => setVersion(value => value + 1)
 
   useEffect(() => {
+    const request = new AbortController()
+    setDailyError(false)
+
+    async function loadDailyResults() {
+      const grouped = new Map<string, DailySummary>()
+      let before: number | undefined
+      while (!request.signal.aborted) {
+        let query = db.from('tasting_responses').select('id, created_at, ratings, favorite, intent, reviewed')
+          .order('id', { ascending: false }).limit(500)
+        if (before !== undefined) query = query.lt('id', before)
+        const { data, error } = await query.abortSignal(request.signal)
+        if (error) throw error
+        const batch = data as (ResultRow & { id: number })[]
+        if (!batch.length) break
+        batch.forEach(row => countDay(grouped, row))
+        before = batch[batch.length - 1].id
+      }
+      if (request.signal.aborted) return
+      const result = [...grouped.values()].sort((a, b) => b.day.localeCompare(a.day))
+      result.forEach(item => { item.averages = item.averages.map(sum => (sum ?? 0) / item.total) })
+      setDays(result)
+      if (version === 0) setDay(value => value || result[0]?.day || '')
+    }
+
+    void loadDailyResults().catch(() => { if (!request.signal.aborted) setDailyError(true) })
+    return () => request.abort()
+  }, [version])
+
+  useEffect(() => {
     let current = true
     setLoading(true)
     setLoadError(false)
@@ -123,7 +161,7 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
         const start = page * PAGE_SIZE
         const [stats, list, open] = await Promise.all([
           db.rpc('tasting_summary'),
-          getResponses(intent, status).range(start, start + PAGE_SIZE - 1),
+          getResponses(intent, status, day).range(start, start + PAGE_SIZE - 1),
           surveyStatus(),
         ])
         if (!current) return
@@ -148,7 +186,7 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
     }
     void load()
     return () => { current = false }
-  }, [page, intent, status, version])
+  }, [page, intent, status, day, version])
 
   async function action(run: () => Promise<void>, message: string, reload = true) {
     setBusy(true)
@@ -183,7 +221,7 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
       const lines = [fields.map(csvCell).join(',')]
       let before: number | undefined
       while (true) {
-        let query = getResponses(intent, status).limit(250)
+        let query = getResponses(intent, status, day).limit(250)
         if (before !== undefined) query = query.lt('id', before)
         const { data, error } = await query
         if (error) throw error
@@ -199,23 +237,13 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
       const href = URL.createObjectURL(file)
       const link = document.createElement('a')
       link.href = href
-      link.download = 'haidilao-tasting-responses.csv'
+      link.download = day ? `haidilao-tasting-responses-${day}.csv` : 'haidilao-tasting-responses.csv'
       link.click()
       setTimeout(() => URL.revokeObjectURL(href), 1000)
     }, 'Couldn’t export responses. Please try again.', false)
   }
 
   const total = summary?.total ?? 0
-  const top = total && summary ? products
-    .filter((_, index) => summary.favorites[index] === Math.max(...summary.favorites))
-    .map(([, name]) => name).join(', ') : '—'
-  const metrics = [
-    ['Total responses', summary?.total ?? '—'],
-    ['Awaiting review', summary?.unreviewed ?? '—'],
-    ['Would buy their favorite', total && summary ? `${Math.round(summary.wouldBuy / total * 100)}%` : '—'],
-    ['Top favorite', top],
-  ]
-
   return <main className="page-width dashboard">
     <div className="dash-head">
       <div><p className="eyebrow">STAFF DASHBOARD</p><h1>Tasting feedback</h1></div>
@@ -223,15 +251,14 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
     </div>
     {(authError || error) && <p className="alert" role="alert">{authError || error}</p>}
     {loadError && <p className="alert" role="alert">Couldn’t load the dashboard. <button onClick={refresh}>Retry</button></p>}
-    <section className="metrics" aria-label="Survey totals">{metrics.map(([label, value]) =>
-      <div className="card" key={label}><span>{label}</span><strong className={label === 'Top favorite' ? 'top-favorite' : ''}>{value}</strong></div>
-    )}</section>
+    <section className="survey-overview" aria-labelledby="overview-title">
+      <h2 id="overview-title">Full survey summary</h2>
+      <p className="muted">{days?.length ? `All responses · ${dayLabel(days[days.length - 1].day)} – ${dayLabel(days[0].day)}` : 'All responses across the survey'}</p>
+      <Metrics summary={summary} />
+    </section>
     <div className="dash-grid">
       <section className="card"><h2>Average ratings</h2><p className="muted">All responses · out of 5</p>
-        {products.map(([name], index) => <div className="bar-row" key={name}>
-          <span>{name}</span><progress max={5} value={summary?.averages[index] ?? 0} aria-label={name} />
-          <strong>{summary?.averages[index]?.toFixed(2) ?? '—'}</strong>
-        </div>)}
+        <Ratings summary={summary} />
       </section>
       <section className="card"><h2>Survey controls</h2>
         <p><span className={`status ${accepting ? 'active' : ''}`}>{accepting === null ? 'Loading status' : accepting ? 'Accepting responses' : 'Paused'}</span></p>
@@ -240,11 +267,13 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
         </button>
       </section>
     </div>
+    <DailyResults days={days} day={day} failed={dailyError} selectDay={value => { setDay(value); setPage(0) }} />
     <section className="card">
       <div className="response-head"><h2>Responses <span className="muted">({count})</span></h2>
         <div className="buttons"><button disabled={loading || busy} onClick={refresh}>Refresh</button>
           <button className="primary" disabled={loading || busy || !count || loadError} onClick={download}>Export CSV</button></div>
       </div>
+      {day && <p className="response-date">Showing {dayLabel(day)} <button onClick={() => { setDay(''); setPage(0) }}>Show all dates</button></p>}
       <div className="filters">
         <select value={intent} aria-label="Purchase intent" onChange={event => { setIntent(event.target.value); setPage(0) }}>
           <option value="">Any purchase intent</option>{intents.map(value => <option key={value}>{value}</option>)}
