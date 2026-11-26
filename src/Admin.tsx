@@ -4,9 +4,11 @@ import type { Session } from '@supabase/supabase-js'
 import { createClient } from '@supabase/supabase-js'
 import { intents, products, supabaseKey, supabaseUrl, surveyStatus } from './survey'
 import type { ResponseRow, Summary } from './survey'
-import { countDay, DailyResults, dayBounds, dayLabel, manilaDay, Metrics, Ratings } from './results'
+import { countDay, DailyResults, dayLabel, manilaDay, Metrics, Ratings } from './results'
 import type { DailySummary, ResultRow } from './results'
 import type { ReportFormat } from './reports/download'
+import { responseDateFilter, responseDateLabel } from './responseDates'
+import type { DateMode } from './responseDates'
 
 const PAGE_SIZE = 25
 const db = createClient(supabaseUrl, supabaseKey)
@@ -14,16 +16,13 @@ const dateFormat = new Intl.DateTimeFormat('en-PH', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila',
 })
 
-function getResponses(intent: string, status: string, day: string) {
+function getResponses(intent: string, status: string, dateFilter: string) {
   let query = db.from('tasting_responses').select(
     'id, created_at, ratings, favorite, intent, comment, reviewed', { count: 'exact' },
   )
   if (intent) query = query.eq('intent', intent)
   if (status) query = query.eq('reviewed', status === 'reviewed')
-  if (day) {
-    const [start, end] = dayBounds(day)
-    query = query.gte('created_at', start).lt('created_at', end)
-  }
+  if (dateFilter) query = query.or(dateFilter)
   return query.order('id', { ascending: false })
 }
 
@@ -110,9 +109,15 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
   const [days, setDays] = useState<DailySummary[] | null>(null)
   const [dailyError, setDailyError] = useState(false)
   const [selectedDay, setSelectedDay] = useState('')
-  const [allDates, setAllDates] = useState(false)
-  const dailyDay = selectedDay || manilaDay()
-  const day = allDates ? '' : dailyDay
+  const [dateMode, setDateMode] = useState<DateMode>('day')
+  const [rangeStart, setRangeStart] = useState(manilaDay)
+  const [rangeEnd, setRangeEnd] = useState(manilaDay)
+  const [chosenDates, setChosenDates] = useState<string[]>([])
+  const [dateToAdd, setDateToAdd] = useState('')
+  const today = manilaDay()
+  const dailyDay = selectedDay || today
+  const dateFilter = responseDateFilter(dateMode, dailyDay, rangeStart, rangeEnd, chosenDates)
+  const dateLabel = responseDateLabel(dateMode, dailyDay, rangeStart, rangeEnd, chosenDates)
   const [rows, setRows] = useState<ResponseRow[]>([])
   const [accepting, setAccepting] = useState<boolean | null>(null)
   const [intent, setIntent] = useState('')
@@ -212,7 +217,7 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
 
   useEffect(() => {
     let current = true
-    const query = JSON.stringify([page, intent, status, day])
+    const query = JSON.stringify([page, intent, status, dateFilter])
     if (lastResponseQuery.current !== query) setLoading(true)
     setLoadError(false)
 
@@ -221,21 +226,21 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
         const start = page * PAGE_SIZE
         const [stats, list, open] = await Promise.all([
           db.rpc('tasting_summary'),
-          getResponses(intent, status, day).range(start, start + PAGE_SIZE - 1),
+          dateFilter === null ? null : getResponses(intent, status, dateFilter).range(start, start + PAGE_SIZE - 1),
           surveyStatus(),
         ])
         if (!current) return
-        if (page > 0 && list.status === 416) {
+        if (page > 0 && list?.status === 416) {
           setPage(0)
           return
         }
-        if (stats.error || list.error) throw new Error('Dashboard query failed')
-        const total = list.count ?? 0
+        if (stats.error || list?.error) throw new Error('Dashboard query failed')
+        const total = list?.count ?? 0
         if (page > 0 && start >= total) {
           setPage(Math.max(0, Math.ceil(total / PAGE_SIZE) - 1))
           return
         }
-        setRows(list.data as ResponseRow[])
+        setRows((list?.data ?? []) as ResponseRow[])
         setCount(total)
         setSummary(stats.data as Summary)
         setAccepting(open)
@@ -247,7 +252,7 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
     }
     void load()
     return () => { current = false }
-  }, [page, intent, status, day, version])
+  }, [page, intent, status, dateFilter, version])
 
   async function action(run: () => Promise<void>, message: string, reload = true) {
     setBusy(true)
@@ -277,13 +282,14 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
   }
 
   async function download() {
+    if (dateFilter === null) return
     setExporting(true)
     try {
       await action(async () => {
         const rows: ResponseRow[] = []
         let before: number | undefined
         while (true) {
-          let query = getResponses(intent, status, day).limit(250)
+          let query = getResponses(intent, status, dateFilter).limit(250)
           if (before !== undefined) query = query.lt('id', before)
           const { data, error } = await query
           if (error) throw error
@@ -301,12 +307,12 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
           file = new Blob(['\uFEFF', lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
         } else {
           const { downloadReport } = await import('./reports/download')
-          file = await downloadReport(format, rows, day, intent, status)
+          file = await downloadReport(format, rows, dateMode === 'all' ? '' : dateLabel, intent, status, dateMode === 'dates' ? chosenDates : [])
         }
         const href = URL.createObjectURL(file)
         const link = document.createElement('a')
         link.href = href
-        link.download = `haidilao-tasting-${day || 'full-survey'}.${format}`
+        link.download = `haidilao-tasting-${dateMode === 'day' ? dailyDay : dateMode === 'range' ? rangeStart + '_to_' + rangeEnd : dateMode === 'dates' ? 'selected-dates' : 'full-survey'}.${format}`
         link.click()
         setTimeout(() => URL.revokeObjectURL(href), 1000)
       }, 'Couldn’t export the report. Please try again.', false)
@@ -318,7 +324,7 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
   const total = summary?.total ?? 0
   function selectDay(value: string) {
     setSelectedDay(value === manilaDay() ? '' : value)
-    setAllDates(false)
+    setDateMode('day')
     setPage(0)
   }
 
@@ -350,14 +356,14 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
     <section className="card responses-card">
       <div className="response-head">
         <div><h2>Responses <span className="muted">({count})</span></h2>
-          <p className="muted">{allDates ? 'All survey dates' : `${dayLabel(day)} · Manila time`}</p></div>
+          <p className="muted">{dateLabel} · Manila time</p></div>
         <button disabled={loading || busy} onClick={refresh}>Refresh</button>
       </div>
       <div className="filters">
-        <label>Survey date <input type="date" value={dailyDay} max={manilaDay()} onChange={event => {
-          const value = event.target.value
-          if (!value || event.target.validity.valid) selectDay(value || manilaDay())
-        }} /></label>
+        <label>Date scope <select value={dateMode} onChange={event => { setDateMode(event.target.value as DateMode); setPage(0) }}>
+          <option value="day">One day</option><option value="range">Date range</option>
+          <option value="dates">Specific dates</option><option value="all">Whole survey</option>
+        </select></label>
         <label>Purchase intent <select value={intent} onChange={event => { setIntent(event.target.value); setPage(0) }}>
           <option value="">Any purchase intent</option>{intents.map(value => <option key={value}>{value}</option>)}
         </select></label>
@@ -365,24 +371,45 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
           <option value="">Any review status</option><option value="new">New</option><option value="reviewed">Reviewed</option>
         </select></label>
       </div>
-      <div className="response-toolbar">
-        <div className="buttons">
-          {dailyDay !== manilaDay() && <button onClick={() => selectDay(manilaDay())}>Back to today</button>}
-          <button onClick={() => { setAllDates(!allDates); setPage(0) }}>
-            {allDates ? 'Show selected date' : 'Show all dates'}
-          </button>
+      {dateMode === 'day' && <div className="date-controls">
+        <label>Survey date <input type="date" value={dailyDay} max={today} onChange={event => {
+          const value = event.target.value
+          if (!value || event.target.validity.valid) selectDay(value || today)
+        }} /></label>
+        {dailyDay !== today && <button onClick={() => selectDay(today)}>Back to today</button>}
+      </div>}
+      {dateMode === 'range' && <div className="date-controls">
+        <label>Start date <input type="date" value={rangeStart} max={today} onChange={event => { if (!event.target.value || event.target.validity.valid) { setRangeStart(event.target.value); setPage(0) } }} /></label>
+        <label>End date <input type="date" value={rangeEnd} max={today} onChange={event => { if (!event.target.value || event.target.validity.valid) { setRangeEnd(event.target.value); setPage(0) } }} /></label>
+      </div>}
+      {dateMode === 'dates' && <>
+        <div className="date-controls">
+          <label>Date to include <input type="date" value={dateToAdd} max={today} onChange={event => setDateToAdd(event.target.value)} /></label>
+          <button disabled={!dateToAdd || dateToAdd > today || chosenDates.includes(dateToAdd)} onClick={() => {
+            setChosenDates(values => [...values, dateToAdd].sort())
+            setDateToAdd('')
+            setPage(0)
+          }}>Add date</button>
         </div>
+        {!!chosenDates.length && <ul className="selected-dates" aria-label="Selected dates">{chosenDates.map(date =>
+          <li key={date}><button aria-label={`Remove ${dayLabel(date)}`} onClick={() => {
+            setChosenDates(values => values.filter(value => value !== date))
+            setPage(0)
+          }}>{dayLabel(date)} <span aria-hidden="true">×</span></button></li>
+        )}</ul>}
+      </>}
+      <div className="response-toolbar">
         <div className="buttons export-actions">
           <select aria-label="Export format" value={format} disabled={busy} onChange={event => setFormat(event.target.value as ReportFormat)}>
             <option value="pdf">PDF</option><option value="docx">Word (.docx)</option>
             <option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option>
           </select>
-          <button className="primary" disabled={loading || busy || !count || loadError} onClick={download}>
+          <button className="primary" disabled={dateFilter === null || loading || busy || !count || loadError} onClick={download}>
             {exporting ? 'Preparing…' : 'Download results'}
           </button>
         </div>
       </div>
-      {loading ? <p role="status">Loading responses…</p> : !loadError && (rows.length ? rows.map(row =>
+      {dateFilter === null ? <p className="empty">{dateLabel}.</p> : loading ? <p role="status">Loading responses…</p> : !loadError && (rows.length ? rows.map(row =>
         <details className="response" key={row.id}>
           <summary><span>#{row.id} <small>{dateFormat.format(new Date(row.created_at))}</small></span>
             <span>{products[row.favorite - 1][1]}</span><span>Buy · {row.intent}</span>
@@ -395,7 +422,7 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
           </div>
         </details>
       ) : <p className="empty">{total ? 'No responses match these filters.' : 'Responses will appear here after guests submit feedback.'}</p>)}
-      {count > PAGE_SIZE && !loadError && <div className="pages">
+      {dateFilter !== null && count > PAGE_SIZE && !loadError && <div className="pages">
         <button disabled={loading || page === 0} onClick={() => setPage(page - 1)}>Previous</button>
         <span>Page {page + 1} of {Math.ceil(count / PAGE_SIZE)}</span>
         <button disabled={loading || (page + 1) * PAGE_SIZE >= count} onClick={() => setPage(page + 1)}>Next</button>

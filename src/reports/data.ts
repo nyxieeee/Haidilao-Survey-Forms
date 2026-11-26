@@ -12,14 +12,14 @@ export const timestamp = new Intl.DateTimeFormat('en-PH', {
 
 export type Table = { title: string; headings: string[]; rows: (number | string)[][] }
 
-export function makeReport(rows: ResponseRow[], day: string, intent: string, status: string) {
+export function makeReport(rows: ResponseRow[], dateLabel: string, intent: string, status: string, selectedDates: string[] = []) {
   const grouped = new Map<string, DailySummary>()
   rows.forEach(row => countDay(grouped, row))
   const days = [...grouped.values()].sort((a, b) => a.day.localeCompare(b.day))
   const period = days.length > 1 ? `${dayLabel(days[0].day)} – ${dayLabel(days[days.length - 1].day)}`
     : days.length ? dayLabel(days[0].day) : ''
   const subtitle = [
-    day ? dayLabel(day) : ['All survey dates', period].filter(Boolean).join(' · '),
+    dateLabel || ['All survey dates', period].filter(Boolean).join(' · '),
     intent && `Purchase intent: ${intent}`,
     status && `Review status: ${status === 'new' ? 'New' : 'Reviewed'}`,
   ].filter(Boolean).join(' | ')
@@ -42,7 +42,10 @@ export function makeReport(rows: ResponseRow[], day: string, intent: string, sta
   }
   const daily: Table = {
     title: 'Daily response counts', headings: ['Manila date', 'Responses', 'Yes', 'Maybe', 'No'],
-    rows: days.map(item => [item.day, item.total, item.wouldBuy, item.maybe, item.no]),
+    rows: selectedDates.length ? selectedDates.map(day => {
+      const item = grouped.get(day)
+      return [day, item?.total ?? 0, item?.wouldBuy ?? 0, item?.maybe ?? 0, item?.no ?? 0]
+    }) : days.map(item => [item.day, item.total, item.wouldBuy, item.maybe, item.no]),
   }
   return { subtitle, rows, metrics, productResults, daily }
 }
