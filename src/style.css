@@ -19,7 +19,7 @@ a { color: inherit; }
 button, input, select, textarea { font: inherit; }
 button, select { cursor: pointer; }
 button:disabled { cursor: default; opacity: .55; }
-:focus-visible { outline: 3px solid #a4000e; outline-offset: 3px; }
+:focus-visible { outline: 2px solid #555; outline-offset: -2px; }
 .page-width { width: min(1120px, calc(100% - 64px)); margin-inline: auto; }
 .top { position: fixed; inset: 0 0 auto; z-index: 20; height: var(--header-height); background: var(--paper); border-bottom: 2px solid #e60012; }
 .top-inner { height: 100%; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
@@ -79,7 +79,8 @@ legend { color: var(--ink); font-weight: 700; padding: 0; }
 .scores label span { width: 41px; padding: 0; }
 .options label span:hover { border-color: var(--red); color: var(--red); }
 .options label input:checked + span { border-color: var(--red); background: var(--red); color: white; }
-.options label input:focus-visible + span { outline: 3px solid #a4000e; outline-offset: 2px; }
+.options label input:focus-visible + span { outline: 2px solid #555; outline-offset: -2px; }
+.options label input:checked:focus-visible + span { outline-color: white; }
 .form-column h2 + fieldset, .purchase { margin-top: 16px; }
 .purchase legend { margin-bottom: 10px; }
 textarea, input:not([type=radio]), select {
