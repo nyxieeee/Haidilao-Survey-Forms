@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { createClient } from '@supabase/supabase-js'
@@ -120,13 +120,67 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
   const [page, setPage] = useState(0)
   const [count, setCount] = useState(0)
   const [version, setVersion] = useState(0)
+  const lastResponseQuery = useRef('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [busy, setBusy] = useState(false)
   const [format, setFormat] = useState<ReportFormat>('pdf')
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState('')
-  const refresh = () => setVersion(value => value + 1)
+  const refresh = useCallback(() => setVersion(value => value + 1), [])
+
+  useEffect(() => {
+    const request = new AbortController()
+    let snapshot: string | undefined
+    let pending: ReturnType<typeof setTimeout> | undefined
+    let checking = false
+    let currentDay = manilaDay()
+
+    function queueRefresh() {
+      if (pending !== undefined || request.signal.aborted) return
+      pending = setTimeout(() => {
+        pending = undefined
+        refresh()
+      }, 250)
+    }
+
+    async function checkForResponses() {
+      if (checking || request.signal.aborted || document.hidden) return
+      checking = true
+      try {
+        const today = manilaDay()
+        if (today !== currentDay) {
+          currentDay = today
+          queueRefresh()
+        }
+        const { data, count, error } = await db.from('tasting_responses')
+          .select('id', { count: 'exact' }).order('id', { ascending: false })
+          .limit(1).abortSignal(request.signal)
+        if (error || request.signal.aborted) return
+        const next = `${count}:${data[0]?.id ?? 0}`
+        if (snapshot !== next && (snapshot !== undefined || count)) queueRefresh()
+        snapshot = next
+      } finally {
+        checking = false
+      }
+    }
+
+    const check = () => { void checkForResponses().catch(() => { /* Try again on the next check. */ }) }
+    const channel = db.channel(`tasting-responses-${crypto.randomUUID()}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tasting_responses' }, queueRefresh)
+      .subscribe(status => { if (status === 'SUBSCRIBED') check() })
+    check()
+    // The check also covers missed events and projects without a Realtime publication.
+    const interval = setInterval(check, 10_000)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      request.abort()
+      clearTimeout(pending)
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', check)
+      void db.removeChannel(channel)
+    }
+  }, [refresh])
 
   useEffect(() => {
     const request = new AbortController()
@@ -158,7 +212,8 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
 
   useEffect(() => {
     let current = true
-    setLoading(true)
+    const query = JSON.stringify([page, intent, status, day])
+    if (lastResponseQuery.current !== query) setLoading(true)
     setLoadError(false)
 
     async function load() {
@@ -184,6 +239,7 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
         setCount(total)
         setSummary(stats.data as Summary)
         setAccepting(open)
+        lastResponseQuery.current = query
         setLoading(false)
       } catch {
         if (current) { setLoadError(true); setLoading(false) }
@@ -262,7 +318,8 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
   const total = summary?.total ?? 0
   return <main className="page-width dashboard">
     <div className="dash-head">
-      <div><p className="eyebrow">STAFF DASHBOARD</p><h1>Tasting feedback</h1></div>
+      <div><p className="eyebrow">STAFF DASHBOARD</p><h1>Tasting feedback</h1>
+        <p className="muted auto-update">Updates automatically</p></div>
       <button onClick={signOut}>Sign out</button>
     </div>
     {(authError || error) && <p className="alert" role="alert">{authError || error}</p>}

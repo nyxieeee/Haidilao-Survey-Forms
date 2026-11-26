@@ -204,3 +204,4 @@ progress::-moz-progress-bar { background: var(--red); }
   .filters { grid-template-columns: minmax(0, 1fr); }
   .pages span { flex-basis: 100%; order: -1; text-align: center; }
 }
+.dash-head .auto-update { margin: 8px 0 0; font-size: .875rem; }

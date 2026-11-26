@@ -29,6 +29,8 @@ Set the two Vite variables in the static host's build environment. Set the proje
 
 Staff can filter by date, purchase intent, or review status, open individual submissions, mark them reviewed, and pause or reopen survey collection. The export menu offers branded PDF, Word, and Excel reports with summary totals, daily counts, and individual responses. It also offers raw CSV. The reports and dashboard use Manila time. CSV timestamps use UTC.
 
+The dashboard checks for new responses automatically. Run the [Realtime migration](supabase/migrations/20261126000200_tasting_realtime.sql) in Supabase SQL Editor to receive new responses as they arrive. Without that migration or when the connection drops, the dashboard checks for new responses every 10 seconds while the tab is visible.
+
 Guest submissions are public and unauthenticated. The migration validates submissions and deduplicates retries by submission ID. It does not enforce one response per person.
 
 Brand background: [Haidilao's official site](https://www.haidilao.com/about/) and its [product tasting and development article](https://www.haidilao.com/article/8353).
