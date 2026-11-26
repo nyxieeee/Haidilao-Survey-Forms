@@ -41,7 +41,7 @@ export function Guest() {
         p_ratings: products.map((_, index) => Number(fields.get(`rating-${index}`))),
         p_favorite: Number(fields.get('favorite')),
         p_intent: fields.get('intent'),
-        p_comment: fields.get('comment'),
+        p_comment: String(fields.get('comment') ?? '').trim(),
       })
       if (data === 'paused') {
         setError('The survey was paused before your response could be saved. Try again when it reopens.')

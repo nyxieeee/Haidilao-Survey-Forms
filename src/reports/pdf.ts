@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf'
-import { products } from '../survey'
+import { feedbackLabel, noFeedback, products } from '../survey'
 import { red, timestamp, title } from './data'
 import type { Report, Table } from './data'
 
@@ -110,12 +110,13 @@ export function pdfReport(report: Report, logo: string) {
   table(report.daily, [60, 29, 29, 29, 29])
   room(22)
   line('Individual responses', 14, true)
-  for (const row of report.rows) {
-    room(23)
-    line(`#${row.id} | ${timestamp.format(new Date(row.created_at))} | ${row.reviewed ? 'Reviewed' : 'New'}`, 11, true)
+  for (const [index, row] of report.rows.entries()) {
+    room(30)
+    line(`#${report.rows.length - index} | ${timestamp.format(new Date(row.created_at))} | ${row.reviewed ? 'Reviewed' : 'New'}`, 11, true)
     line(`Favorite: ${products[row.favorite - 1][1]} | Would buy: ${row.intent}`)
     line(`Ratings (in product order above): ${row.ratings.join(' / ')}`)
-    if (row.comment) comment(row.comment)
+    line(feedbackLabel, 10, true)
+    comment(row.comment?.trim() || noFeedback)
     y += 5
   }
   const pages = doc.getNumberOfPages()

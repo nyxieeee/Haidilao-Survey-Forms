@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { createClient } from '@supabase/supabase-js'
-import { intents, products, supabaseKey, supabaseUrl, surveyStatus } from './survey'
+import { feedbackLabel, intents, noFeedback, products, supabaseKey, supabaseUrl, surveyStatus } from './survey'
 import type { ResponseRow, Summary } from './survey'
 import { countDay, DailyResults, dayLabel, manilaDay, Metrics, Ratings } from './results'
 import type { DailySummary, ResultRow } from './results'
@@ -300,9 +300,9 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
         }
         let file: Blob
         if (format === 'csv') {
-          const fields = ['ID', 'Submitted (UTC)', ...products.map(([name]) => name), 'Favorite', 'Would buy', 'Comment', 'Status']
-          const lines = [fields.map(csvCell).join(','), ...rows.map(row =>
-            [row.id, row.created_at, ...row.ratings, products[row.favorite - 1][1], row.intent, row.comment,
+          const fields = ['Response #', 'Submitted (UTC)', feedbackLabel, ...products.map(([name]) => name), 'Favorite', 'Would buy', 'Status']
+          const lines = [fields.map(csvCell).join(','), ...rows.map((row, index) =>
+            [rows.length - index, row.created_at, row.comment, ...row.ratings, products[row.favorite - 1][1], row.intent,
               row.reviewed ? 'Reviewed' : 'New'].map(csvCell).join(','))]
           file = new Blob(['\uFEFF', lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
         } else {
@@ -409,15 +409,18 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
           </button>
         </div>
       </div>
-      {dateFilter === null ? <p className="empty">{dateLabel}.</p> : loading ? <p role="status">Loading responses…</p> : !loadError && (rows.length ? rows.map(row =>
+      {dateFilter === null ? <p className="empty">{dateLabel}.</p> : loading ? <p role="status">Loading responses…</p> : !loadError && (rows.length ? rows.map((row, index) =>
         <details className="response" key={row.id}>
-          <summary><span>#{row.id} <small>{dateFormat.format(new Date(row.created_at))}</small></span>
+          <summary><span>#{count - page * PAGE_SIZE - index} <small>{dateFormat.format(new Date(row.created_at))}</small></span>
             <span>{products[row.favorite - 1][1]}</span><span>Buy · {row.intent}</span>
-            <span className={`status ${row.reviewed ? '' : 'active'}`}>{row.reviewed ? 'Reviewed' : 'New'}</span></summary>
+            <span className={`status ${row.reviewed ? '' : 'active'}`}>{row.reviewed ? 'Reviewed' : 'New'}</span>
+            <span className="feedback-preview"><strong>{feedbackLabel}</strong>
+              <span>{row.comment?.trim() || noFeedback}</span></span>
+          </summary>
           <div className="response-body"><ul>{products.map(([name], index) =>
             <li key={name}>{name} <strong>{row.ratings[index]}/5</strong></li>
           )}</ul>
-            <p className="comment">{row.comment || 'No comments provided.'}</p>
+            <h3>{feedbackLabel}</h3><p className="comment">{row.comment?.trim() || noFeedback}</p>
             <button disabled={busy} onClick={() => review(row)}>{row.reviewed ? 'Mark new' : 'Mark reviewed'}</button>
           </div>
         </details>

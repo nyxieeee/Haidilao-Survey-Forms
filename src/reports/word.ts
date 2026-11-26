@@ -2,7 +2,7 @@ import {
   Document, Header, ImageRun, Packer, Paragraph, Table as WordTable, TableCell, TableRow,
   TextRun, WidthType,
 } from 'docx'
-import { products } from '../survey'
+import { feedbackLabel, noFeedback, products } from '../survey'
 import { red, timestamp, title } from './data'
 import type { Report, Table } from './data'
 
@@ -48,11 +48,12 @@ export function wordReport(report: Report, logo: string) {
           paragraph(section.title, 27, true, red), table(section), paragraph(''),
         ]),
         paragraph('Individual responses', 27, true, red),
-        ...report.rows.flatMap(row => [
-          paragraph(`#${row.id} | ${timestamp.format(new Date(row.created_at))} | ${row.reviewed ? 'Reviewed' : 'New'}`, 22, true),
+        ...report.rows.flatMap((row, index) => [
+          paragraph(`#${report.rows.length - index} | ${timestamp.format(new Date(row.created_at))} | ${row.reviewed ? 'Reviewed' : 'New'}`, 22, true),
           paragraph(`Favorite: ${products[row.favorite - 1][1]} | Would buy: ${row.intent}`),
           paragraph(`Ratings (in product order above): ${row.ratings.join(' / ')}`),
-          ...(row.comment ? [paragraph(row.comment)] : []),
+          paragraph(feedbackLabel, 21, true),
+          paragraph(row.comment?.trim() || noFeedback),
           paragraph(''),
         ]),
       ],

@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs'
-import { products } from '../survey'
+import { feedbackLabel, noFeedback, products } from '../survey'
 import { brand, red, timestamp, title } from './data'
 import type { Report, Table } from './data'
 
@@ -52,12 +52,17 @@ export async function spreadsheetReport(report: Report, logo: string) {
   const daily = makeSheet('Daily results', [20, 15, 15, 15, 15])
   table(daily, report.daily)
 
-  const responses = makeSheet('Responses', [10, 25, 26, 26, 24, 24, 28, 26, 15, 54, 16])
+  const responses = makeSheet('Responses', [13, 25, 56, 26, 26, 24, 24, 28, 26, 15, 16])
   const header = table(responses, {
     title: 'Individual responses',
-    headings: ['ID', 'Submitted (Manila)', ...products.map(([name]) => name), 'Favorite', 'Would buy', 'Comment', 'Status'],
-    rows: report.rows.map(row => [row.id, timestamp.format(new Date(row.created_at)), ...row.ratings,
-      products[row.favorite - 1][1], row.intent, row.comment, row.reviewed ? 'Reviewed' : 'New']),
+    headings: ['Response #', 'Submitted (Manila)', feedbackLabel, ...products.map(([name]) => name), 'Favorite', 'Would buy', 'Status'],
+    rows: report.rows.map((row, index) => [report.rows.length - index, timestamp.format(new Date(row.created_at)),
+      row.comment?.trim() || noFeedback, ...row.ratings, products[row.favorite - 1][1], row.intent,
+      row.reviewed ? 'Reviewed' : 'New']),
+  })
+  report.rows.forEach((row, index) => {
+    const lines = (row.comment ?? '').split(/\r?\n/).reduce((total, line) => total + Math.max(1, Math.ceil(line.length / 48)), 0)
+    responses.getRow(header + index + 1).height = Math.min(390, Math.max(30, 16 * lines + 6))
   })
   responses.views = [{ state: 'frozen', ySplit: header }]
   if (report.rows.length) responses.autoFilter = { from: { row: header, column: 1 }, to: { row: header + report.rows.length, column: 11 } }

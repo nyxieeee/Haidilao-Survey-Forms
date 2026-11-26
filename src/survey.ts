@@ -11,6 +11,8 @@ export const products = [
 ] as const
 
 export const intents = ['Yes', 'Maybe', 'No'] as const
+export const feedbackLabel = 'Feedback and suggestions'
+export const noFeedback = 'No feedback provided.'
 
 async function publicRequest(path: string, options?: { body?: object; signal?: AbortSignal }) {
   const response = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/rest/v1/${path}`, {
