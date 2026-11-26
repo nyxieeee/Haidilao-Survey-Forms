@@ -27,7 +27,7 @@ npm run dev
 
 Set the two Vite variables in the static host's build environment. Set the project root to this directory, the build command to `npm run build`, and the output directory to `dist`. Vercel uses the included `vercel.json` to serve `index.html` for `/admin`. For other hosts, configure the same rewrite if needed. Use HTTPS and type `/admin` after the site domain in your browser to open staff sign-in.
 
-Staff can filter by purchase intent or review status, open individual submissions, mark them reviewed, export filtered responses to CSV, and pause or reopen survey collection. Dashboard timestamps use Manila time. CSV timestamps use UTC.
+Staff can filter by date, purchase intent, or review status, open individual submissions, mark them reviewed, and pause or reopen survey collection. The export menu offers branded PDF, Word, and Excel reports with summary totals, daily counts, and individual responses. It also offers raw CSV. The reports and dashboard use Manila time. CSV timestamps use UTC.
 
 Guest submissions are public and unauthenticated. The migration validates submissions and deduplicates retries by submission ID. It does not enforce one response per person.
 

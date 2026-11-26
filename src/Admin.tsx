@@ -6,6 +6,7 @@ import { intents, products, supabaseKey, supabaseUrl, surveyStatus } from './sur
 import type { ResponseRow, Summary } from './survey'
 import { countDay, DailyResults, dayBounds, dayLabel, Metrics, Ratings } from './results'
 import type { DailySummary, ResultRow } from './results'
+import type { ReportFormat } from './reports/download'
 
 const PAGE_SIZE = 25
 const db = createClient(supabaseUrl, supabaseKey)
@@ -119,6 +120,8 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [format, setFormat] = useState<ReportFormat>('pdf')
+  const [exporting, setExporting] = useState(false)
   const [error, setError] = useState('')
   const refresh = () => setVersion(value => value + 1)
 
@@ -215,32 +218,43 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
     }, 'Couldn’t update this response.')
   }
 
-  function download() {
-    return action(async () => {
-      const fields = ['ID', 'Submitted (UTC)', ...products.map(([name]) => name), 'Favorite', 'Would buy', 'Comment', 'Status']
-      const lines = [fields.map(csvCell).join(',')]
-      let before: number | undefined
-      while (true) {
-        let query = getResponses(intent, status, day).limit(250)
-        if (before !== undefined) query = query.lt('id', before)
-        const { data, error } = await query
-        if (error) throw error
-        const batch = data as ResponseRow[]
-        if (!batch.length) break
-        for (const row of batch) {
-          lines.push([row.id, row.created_at, ...row.ratings, products[row.favorite - 1][1], row.intent, row.comment,
-            row.reviewed ? 'Reviewed' : 'New'].map(csvCell).join(','))
+  async function download() {
+    setExporting(true)
+    try {
+      await action(async () => {
+        const rows: ResponseRow[] = []
+        let before: number | undefined
+        while (true) {
+          let query = getResponses(intent, status, day).limit(250)
+          if (before !== undefined) query = query.lt('id', before)
+          const { data, error } = await query
+          if (error) throw error
+          const batch = data as ResponseRow[]
+          if (!batch.length) break
+          rows.push(...batch)
+          before = batch[batch.length - 1].id
         }
-        before = batch[batch.length - 1].id
-      }
-      const file = new Blob(['\uFEFF', lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
-      const href = URL.createObjectURL(file)
-      const link = document.createElement('a')
-      link.href = href
-      link.download = day ? `haidilao-tasting-responses-${day}.csv` : 'haidilao-tasting-responses.csv'
-      link.click()
-      setTimeout(() => URL.revokeObjectURL(href), 1000)
-    }, 'Couldn’t export responses. Please try again.', false)
+        let file: Blob
+        if (format === 'csv') {
+          const fields = ['ID', 'Submitted (UTC)', ...products.map(([name]) => name), 'Favorite', 'Would buy', 'Comment', 'Status']
+          const lines = [fields.map(csvCell).join(','), ...rows.map(row =>
+            [row.id, row.created_at, ...row.ratings, products[row.favorite - 1][1], row.intent, row.comment,
+              row.reviewed ? 'Reviewed' : 'New'].map(csvCell).join(','))]
+          file = new Blob(['\uFEFF', lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
+        } else {
+          const { downloadReport } = await import('./reports/download')
+          file = await downloadReport(format, rows, day, intent, status)
+        }
+        const href = URL.createObjectURL(file)
+        const link = document.createElement('a')
+        link.href = href
+        link.download = `haidilao-tasting-${day || 'full-survey'}.${format}`
+        link.click()
+        setTimeout(() => URL.revokeObjectURL(href), 1000)
+      }, 'Couldn’t export the report. Please try again.', false)
+    } finally {
+      setExporting(false)
+    }
   }
 
   const total = summary?.total ?? 0
@@ -271,7 +285,13 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
     <section className="card">
       <div className="response-head"><h2>Responses <span className="muted">({count})</span></h2>
         <div className="buttons"><button disabled={loading || busy} onClick={refresh}>Refresh</button>
-          <button className="primary" disabled={loading || busy || !count || loadError} onClick={download}>Export CSV</button></div>
+          <select aria-label="Export format" value={format} disabled={busy} onChange={event => setFormat(event.target.value as ReportFormat)}>
+            <option value="pdf">PDF</option><option value="docx">Word (.docx)</option>
+            <option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option>
+          </select>
+          <button className="primary" disabled={loading || busy || !count || loadError} onClick={download}>
+            {exporting ? 'Preparing…' : 'Download results'}
+          </button></div>
       </div>
       {day && <p className="response-date">Showing {dayLabel(day)} <button onClick={() => { setDay(''); setPage(0) }}>Show all dates</button></p>}
       <div className="filters">
