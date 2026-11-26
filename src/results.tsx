@@ -65,14 +65,7 @@ export function DailyResults({ days, day, selectDay, failed }: {
   const selected = days?.find(item => item.day === day)
   return <section className="card daily-results">
     <div className="response-head">
-      <div><h2>Daily results</h2><p className="muted">Dates use Manila time.</p></div>
-      <div className="buttons daily-actions">
-        <label className="day-picker">Survey date <input type="date" value={day} max={manilaDay()} onChange={event => {
-          const value = event.target.value
-          if (!value || event.target.validity.valid) selectDay(value || manilaDay())
-        }} /></label>
-        {day !== manilaDay() && <button onClick={() => selectDay(manilaDay())}>Back to today</button>}
-      </div>
+      <div><h2>Daily results</h2><p className="muted">{dayLabel(day)} · Manila time</p></div>
     </div>
     {failed ? <p role="alert">Couldn’t load daily results. Use Refresh to try again.</p>
       : !days ? <p role="status">Loading daily results…</p>

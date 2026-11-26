@@ -316,6 +316,12 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
   }
 
   const total = summary?.total ?? 0
+  function selectDay(value: string) {
+    setSelectedDay(value === manilaDay() ? '' : value)
+    setAllDates(false)
+    setPage(0)
+  }
+
   return <main className="page-width dashboard">
     <div className="dash-head">
       <div><p className="eyebrow">STAFF DASHBOARD</p><h1>Tasting feedback</h1>
@@ -324,7 +330,7 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
     </div>
     {(authError || error) && <p className="alert" role="alert">{authError || error}</p>}
     {loadError && <p className="alert" role="alert">Couldn’t load the dashboard. <button onClick={refresh}>Retry</button></p>}
-    <section className="survey-overview" aria-labelledby="overview-title">
+    <section className="card survey-overview" aria-labelledby="overview-title">
       <h2 id="overview-title">Full survey summary</h2>
       <p className="muted">{days?.length ? `All responses · ${dayLabel(days[days.length - 1].day)} – ${dayLabel(days[0].day)}` : 'All responses across the survey'}</p>
       <Metrics summary={summary} />
@@ -340,35 +346,41 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
         </button>
       </section>
     </div>
-    <DailyResults days={days} day={dailyDay} failed={dailyError} selectDay={value => {
-      setSelectedDay(value === manilaDay() ? '' : value)
-      setAllDates(false)
-      setPage(0)
-    }} />
+    <DailyResults days={days} day={dailyDay} failed={dailyError} selectDay={selectDay} />
     <section className="card responses-card">
-      <div className="response-head"><h2>Responses <span className="muted">({count})</span></h2>
-        <div className="buttons export-actions"><button className="refresh-responses" disabled={loading || busy} onClick={refresh}>Refresh</button>
+      <div className="response-head">
+        <div><h2>Responses <span className="muted">({count})</span></h2>
+          <p className="muted">{allDates ? 'All survey dates' : `${dayLabel(day)} · Manila time`}</p></div>
+        <button disabled={loading || busy} onClick={refresh}>Refresh</button>
+      </div>
+      <div className="filters">
+        <label>Survey date <input type="date" value={dailyDay} max={manilaDay()} onChange={event => {
+          const value = event.target.value
+          if (!value || event.target.validity.valid) selectDay(value || manilaDay())
+        }} /></label>
+        <label>Purchase intent <select value={intent} onChange={event => { setIntent(event.target.value); setPage(0) }}>
+          <option value="">Any purchase intent</option>{intents.map(value => <option key={value}>{value}</option>)}
+        </select></label>
+        <label>Review status <select value={status} onChange={event => { setStatus(event.target.value); setPage(0) }}>
+          <option value="">Any review status</option><option value="new">New</option><option value="reviewed">Reviewed</option>
+        </select></label>
+      </div>
+      <div className="response-toolbar">
+        <div className="buttons">
+          {dailyDay !== manilaDay() && <button onClick={() => selectDay(manilaDay())}>Back to today</button>}
+          <button onClick={() => { setAllDates(!allDates); setPage(0) }}>
+            {allDates ? 'Show selected date' : 'Show all dates'}
+          </button>
+        </div>
+        <div className="buttons export-actions">
           <select aria-label="Export format" value={format} disabled={busy} onChange={event => setFormat(event.target.value as ReportFormat)}>
             <option value="pdf">PDF</option><option value="docx">Word (.docx)</option>
             <option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option>
           </select>
           <button className="primary" disabled={loading || busy || !count || loadError} onClick={download}>
             {exporting ? 'Preparing…' : 'Download results'}
-          </button></div>
-      </div>
-      <p className="response-date">
-        {allDates ? 'Showing all dates' : `Showing ${dayLabel(day)}`}
-        <button onClick={() => { setAllDates(!allDates); setPage(0) }}>
-          {allDates ? 'Show selected date' : 'Show all dates'}
-        </button>
-      </p>
-      <div className="filters">
-        <select value={intent} aria-label="Purchase intent" onChange={event => { setIntent(event.target.value); setPage(0) }}>
-          <option value="">Any purchase intent</option>{intents.map(value => <option key={value}>{value}</option>)}
-        </select>
-        <select value={status} aria-label="Review status" onChange={event => { setStatus(event.target.value); setPage(0) }}>
-          <option value="">Any review status</option><option value="new">New</option><option value="reviewed">Reviewed</option>
-        </select>
+          </button>
+        </div>
       </div>
       {loading ? <p role="status">Loading responses…</p> : !loadError && (rows.length ? rows.map(row =>
         <details className="response" key={row.id}>
