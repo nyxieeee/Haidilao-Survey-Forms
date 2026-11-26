@@ -25,7 +25,7 @@ npm run dev
 
 ## Deploy
 
-Set the two Vite variables in the static host's build environment. Set the project root to this directory, the build command to `npm run build`, and the output directory to `dist`. Configure the host to serve `index.html` for `/admin` and use HTTPS. Type `/admin` after the site domain in your browser to open staff sign-in.
+Set the two Vite variables in the static host's build environment. Set the project root to this directory, the build command to `npm run build`, and the output directory to `dist`. Vercel uses the included `vercel.json` to serve `index.html` for `/admin`. For other hosts, configure the same rewrite if needed. Use HTTPS and type `/admin` after the site domain in your browser to open staff sign-in.
 
 Staff can filter by purchase intent or review status, open individual submissions, mark them reviewed, export filtered responses to CSV, and pause or reopen survey collection. Dashboard timestamps use Manila time. CSV timestamps use UTC.
 
