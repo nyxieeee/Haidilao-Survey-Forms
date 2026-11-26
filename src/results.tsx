@@ -66,7 +66,7 @@ export function DailyResults({ days, day, selectDay, failed }: {
   return <section className="card daily-results">
     <div className="response-head">
       <div><h2>Daily results</h2><p className="muted">Dates use Manila time.</p></div>
-      <div className="buttons">
+      <div className="buttons daily-actions">
         <label className="day-picker">Survey date <input type="date" value={day} max={manilaDay()} onChange={event => {
           const value = event.target.value
           if (!value || event.target.validity.valid) selectDay(value || manilaDay())

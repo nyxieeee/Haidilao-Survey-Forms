@@ -288,9 +288,9 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
       setAllDates(false)
       setPage(0)
     }} />
-    <section className="card">
+    <section className="card responses-card">
       <div className="response-head"><h2>Responses <span className="muted">({count})</span></h2>
-        <div className="buttons"><button disabled={loading || busy} onClick={refresh}>Refresh</button>
+        <div className="buttons export-actions"><button className="refresh-responses" disabled={loading || busy} onClick={refresh}>Refresh</button>
           <select aria-label="Export format" value={format} disabled={busy} onChange={event => setFormat(event.target.value as ReportFormat)}>
             <option value="pdf">PDF</option><option value="docx">Word (.docx)</option>
             <option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option>

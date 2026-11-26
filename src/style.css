@@ -97,6 +97,7 @@ main > .notice { margin-block: 45px; }
 .login { max-width: 470px; margin-inline: auto; }
 .login form { display: grid; gap: 10px; margin-top: 12px; }
 .login form label { font-weight: 700; }
+.login form input { width: 100%; min-width: 0; }
 .login form .primary { margin-top: 8px; }
 .alert { color: #7c1020; background: #fce8e7; padding: 12px 16px; border: 1px solid #efc1c4; border-radius: 10px; }
 footer { display: flex; justify-content: space-between; gap: 9px 20px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-block: 19px 26px; color: var(--muted); font-size: .85rem; }
@@ -119,7 +120,7 @@ progress::-moz-progress-bar { background: var(--red); }
 .status.active { background: #f7e3e6; color: var(--deep); }
 .filters, .buttons, .pages { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .filters { margin-block: 15px; }
-.filters select { appearance: none; padding-right: 34px; background: linear-gradient(45deg, transparent 50%, var(--muted) 50%) right 16px center / 5px 5px no-repeat, linear-gradient(135deg, var(--muted) 50%, transparent 50%) right 11px center / 5px 5px no-repeat, #ffffff; }
+.filters select, .export-actions select { appearance: none; padding-right: 34px; background: linear-gradient(45deg, transparent 50%, var(--muted) 50%) right 16px center / 5px 5px no-repeat, linear-gradient(135deg, var(--muted) 50%, transparent 50%) right 11px center / 5px 5px no-repeat, #ffffff; }
 .response { border-top: 1px solid var(--line); }
 .response summary { display: grid; grid-template-columns: 1fr 1.25fr .65fr auto; align-items: center; gap: 9px; padding: 13px 5px; cursor: pointer; font-weight: 700; font-size: .92rem; }
 .response summary:hover { color: var(--red); }
@@ -150,19 +151,11 @@ progress::-moz-progress-bar { background: var(--red); }
   .hero-meta { padding-top: 0; font-size: .75rem; }
   .scores { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: 285px; }
   .scores label span { width: 100%; min-height: 44px; }
-  .dash-grid { grid-template-columns: 1fr; }
-  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .response summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .filters select { max-width: 100%; }
-  .dash-head button { flex-shrink: 0; }
 }
 @media (min-width: 731px) and (max-height: 590px) {
   .hero-intro { padding: 21px 25px; }
   .hero h1 { font-size: clamp(2rem, 5.8vh, 3rem); }
   .hero-art { display: none; }
-}
-@media (max-width: 380px) {
-  .response-head { align-items: start; flex-direction: column; }
 }
 .survey-overview > p, .daily-results .response-head p { margin: 5px 0 14px; }
 .daily-results { margin-bottom: 12px; }
@@ -184,5 +177,30 @@ progress::-moz-progress-bar { background: var(--red); }
 .day-history button[aria-pressed="true"] { border-color: var(--red); color: var(--deep); }
 .response-date { justify-content: flex-start; flex-wrap: wrap; }
 @media (max-width: 730px) {
-  .daily-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  main > .login { margin-block: 22px 32px; }
+  .dashboard { margin-block: 20px 32px; }
+  .dash-head { align-items: flex-end; }
+  .dash-head button { flex-shrink: 0; }
+  .dashboard .response-head { align-items: stretch; flex-direction: column; }
+  .metrics, .daily-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metrics .card, .daily-counts > div { padding: 12px; overflow-wrap: anywhere; }
+  .dash-grid { grid-template-columns: minmax(0, 1fr); }
+  .day-picker { flex: 1 1 155px; min-width: 0; }
+  .day-picker input { width: 100%; min-width: 0; }
+  .daily-actions { align-items: flex-end; }
+  .export-actions, .filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  .export-actions select, .filters select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+  .export-actions .refresh-responses { grid-column: 1 / -1; justify-self: start; }
+  .response summary { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow-wrap: anywhere; }
+  .response-body { padding-inline: 12px; }
+  .response-body li strong { flex-shrink: 0; }
+  .pages { justify-content: space-between; }
+}
+@media (max-width: 375px) {
+  .filters { grid-template-columns: minmax(0, 1fr); }
+  .pages span { flex-basis: 100%; order: -1; text-align: center; }
 }
