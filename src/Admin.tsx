@@ -4,7 +4,7 @@ import type { Session } from '@supabase/supabase-js'
 import { createClient } from '@supabase/supabase-js'
 import { intents, products, supabaseKey, supabaseUrl, surveyStatus } from './survey'
 import type { ResponseRow, Summary } from './survey'
-import { countDay, DailyResults, dayBounds, dayLabel, Metrics, Ratings } from './results'
+import { countDay, DailyResults, dayBounds, dayLabel, manilaDay, Metrics, Ratings } from './results'
 import type { DailySummary, ResultRow } from './results'
 import type { ReportFormat } from './reports/download'
 
@@ -109,7 +109,10 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
   const [summary, setSummary] = useState<Summary | null>(null)
   const [days, setDays] = useState<DailySummary[] | null>(null)
   const [dailyError, setDailyError] = useState(false)
-  const [day, setDay] = useState('')
+  const [selectedDay, setSelectedDay] = useState('')
+  const [allDates, setAllDates] = useState(false)
+  const dailyDay = selectedDay || manilaDay()
+  const day = allDates ? '' : dailyDay
   const [rows, setRows] = useState<ResponseRow[]>([])
   const [accepting, setAccepting] = useState<boolean | null>(null)
   const [intent, setIntent] = useState('')
@@ -147,7 +150,6 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
       const result = [...grouped.values()].sort((a, b) => b.day.localeCompare(a.day))
       result.forEach(item => { item.averages = item.averages.map(sum => (sum ?? 0) / item.total) })
       setDays(result)
-      if (version === 0) setDay(value => value || result[0]?.day || '')
     }
 
     void loadDailyResults().catch(() => { if (!request.signal.aborted) setDailyError(true) })
@@ -281,7 +283,11 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
         </button>
       </section>
     </div>
-    <DailyResults days={days} day={day} failed={dailyError} selectDay={value => { setDay(value); setPage(0) }} />
+    <DailyResults days={days} day={dailyDay} failed={dailyError} selectDay={value => {
+      setSelectedDay(value === manilaDay() ? '' : value)
+      setAllDates(false)
+      setPage(0)
+    }} />
     <section className="card">
       <div className="response-head"><h2>Responses <span className="muted">({count})</span></h2>
         <div className="buttons"><button disabled={loading || busy} onClick={refresh}>Refresh</button>
@@ -293,7 +299,12 @@ function Dashboard({ signOut, authError }: { signOut: () => Promise<void>, authE
             {exporting ? 'Preparing…' : 'Download results'}
           </button></div>
       </div>
-      {day && <p className="response-date">Showing {dayLabel(day)} <button onClick={() => { setDay(''); setPage(0) }}>Show all dates</button></p>}
+      <p className="response-date">
+        {allDates ? 'Showing all dates' : `Showing ${dayLabel(day)}`}
+        <button onClick={() => { setAllDates(!allDates); setPage(0) }}>
+          {allDates ? 'Show selected date' : 'Show all dates'}
+        </button>
+      </p>
       <div className="filters">
         <select value={intent} aria-label="Purchase intent" onChange={event => { setIntent(event.target.value); setPage(0) }}>
           <option value="">Any purchase intent</option>{intents.map(value => <option key={value}>{value}</option>)}

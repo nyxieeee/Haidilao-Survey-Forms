@@ -10,9 +10,13 @@ const manilaDate = new Intl.DateTimeFormat('en', {
 const readableDate = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeZone: 'UTC' })
 export const dayLabel = (day: string) => readableDate.format(new Date(day + 'T00:00:00Z'))
 
+export function manilaDay(date = new Date()) {
+  const parts = Object.fromEntries(manilaDate.formatToParts(date).map(part => [part.type, part.value]))
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+
 export function countDay(days: Map<string, DailySummary>, row: ResultRow) {
-  const parts = Object.fromEntries(manilaDate.formatToParts(new Date(row.created_at)).map(part => [part.type, part.value]))
-  const day = `${parts.year}-${parts.month}-${parts.day}`
+  const day = manilaDay(new Date(row.created_at))
   let summary = days.get(day)
   if (!summary) {
     summary = { day, total: 0, unreviewed: 0, wouldBuy: 0, maybe: 0, no: 0,
@@ -62,7 +66,13 @@ export function DailyResults({ days, day, selectDay, failed }: {
   return <section className="card daily-results">
     <div className="response-head">
       <div><h2>Daily results</h2><p className="muted">Dates use Manila time.</p></div>
-      <label className="day-picker">Survey date <input type="date" value={day} onChange={event => selectDay(event.target.value)} /></label>
+      <div className="buttons">
+        <label className="day-picker">Survey date <input type="date" value={day} max={manilaDay()} onChange={event => {
+          const value = event.target.value
+          if (!value || event.target.validity.valid) selectDay(value || manilaDay())
+        }} /></label>
+        {day !== manilaDay() && <button onClick={() => selectDay(manilaDay())}>Back to today</button>}
+      </div>
     </div>
     {failed ? <p role="alert">Couldn’t load daily results. Use Refresh to try again.</p>
       : !days ? <p role="status">Loading daily results…</p>
@@ -75,7 +85,7 @@ export function DailyResults({ days, day, selectDay, failed }: {
           <div><h3>Favorite picks</h3><dl className="favorites">{products.map(([, name], index) =>
             <div key={name}><dt>{name}</dt><dd>{selected.favorites[index]}</dd></div>)}</dl></div>
         </div>
-      </> : <p>{day ? 'No responses on this date.' : 'Choose a date to see its results.'}</p>}
+      </> : <p>No responses for {dayLabel(day)}.</p>}
     {!!days?.length && <details className="day-history">
       <summary>Response counts by date</summary>
       <ul>{days.map(item => <li key={item.day}>
